@@ -1,0 +1,126 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;0,800;1,600;1,700&display=swap');
+
+@layer base {
+  :root {
+    --burgundy-primary: #600010;
+    --burgundy-dark: #4a000c;
+    --burgundy-light: #8e1528;
+    --gold-accent: #d4af37;
+    --gold-light: #f3e5ab;
+    --polish-bg: #f5f2ed;
+  }
+}
+
+body {
+  background-color: var(--polish-bg);
+  color: #1a1a1a;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  overflow-x: hidden;
+}
+
+.font-serif {
+  font-family: 'Playfair Display', Georgia, serif;
+}
+
+/* Custom subtle marble/polished texture background */
+.bg-marble-texture {
+  background-color: #f5f2ed;
+  background-image: radial-gradient(#e0d9cb 0.75px, transparent 0.75px), radial-gradient(#e0d9cb 0.75px, #f5f2ed 0.75px);
+  background-size: 28px 28px;
+  background-position: 0 0, 14px 14px;
+}
+
+.bg-burgundy-gradient {
+  background: linear-gradient(135deg, #4a000c 0%, #600010 50%, #380008 100%);
+}
+
+.bg-gold-gradient {
+  background: linear-gradient(135deg, #d4af37 0%, #f3e5ab 50%, #c5a028 100%);
+}
+
+.text-burgundy {
+  color: #600010;
+}
+
+.text-gold {
+  color: #d4af37;
+}
+
+.border-gold {
+  border-color: #d4af37;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #ede8de;
+}
+::-webkit-scrollbar-thumb {
+  background: #d4af37;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #600010;
+}
+
+/* ========================================================================= */
+/* MEDIA PRINT STYLES FOR CLEAN REPORT PRINTING                              */
+/* ========================================================================= */
+@media print {
+  aside,
+  header,
+  .no-print,
+  button,
+  nav,
+  input,
+  select {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  div,
+  main,
+  section {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    box-shadow: none !important;
+    border-color: #cbd5e1 !important;
+    background: transparent !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .print-break-inside-avoid {
+    break-inside: avoid !important;
+  }
+
+  .print-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+}
+
+.print-only {
+  display: none;
+}
+
+

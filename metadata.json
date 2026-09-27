@@ -1,0 +1,8 @@
+{
+  "name": "Escola Sabatina VP 2",
+  "description": "Sistema completo de gestão da Escola Sabatina - Membros, Chamada Semanal, Classes e Unidades, Projeto Maná, Calendário 2026 e Assistente IA.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
