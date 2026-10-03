@@ -29,6 +29,7 @@ interface DeliveryAttachmentModalProps {
   onClose: () => void;
   order: ManaSubscription | null;
   initialQuarter?: number; // 1 | 2 | 3 | 4
+  selectedYear?: number;
   onSaveDelivery: (updatedOrder: ManaSubscription) => void;
   members?: Member[];
 }
@@ -42,6 +43,7 @@ export function DeliveryAttachmentModal(props: DeliveryAttachmentModalProps) {
       order={props.order}
       onClose={props.onClose}
       initialQuarter={props.initialQuarter}
+      selectedYear={props.selectedYear}
       onSaveDelivery={props.onSaveDelivery}
       members={props.members}
     />
@@ -52,6 +54,7 @@ interface DeliveryAttachmentModalContentProps {
   order: ManaSubscription;
   onClose: () => void;
   initialQuarter?: number;
+  selectedYear?: number;
   onSaveDelivery: (updatedOrder: ManaSubscription) => void;
   members?: Member[];
 }
@@ -60,6 +63,7 @@ function DeliveryAttachmentModalContent({
   order,
   onClose,
   initialQuarter = 1,
+  selectedYear = 2026,
   onSaveDelivery,
 }: DeliveryAttachmentModalContentProps) {
   const [selectedQ, setSelectedQ] = useState<1 | 2 | 3 | 4>(
@@ -356,7 +360,7 @@ function DeliveryAttachmentModalContent({
           {/* Delivery Status selector */}
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-2 uppercase tracking-wider">
-              Status da Entrega — {selectedQ}º Trimestre 2026:
+              Status da Entrega — {selectedQ}º Trimestre {selectedYear}:
             </label>
             <div className="grid grid-cols-3 gap-2">
               <button
@@ -615,7 +619,7 @@ function DeliveryAttachmentModalContent({
         <div className="bg-gray-100/90 border-t border-gray-200 px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
           <div className="text-xs text-gray-500 flex items-center gap-1">
             <span>Trimestre Atual:</span>
-            <strong className="text-amber-900 font-bold">{selectedQ}º Trimestre 2026</strong>
+            <strong className="text-amber-900 font-bold">{selectedQ}º Trimestre {selectedYear}</strong>
           </div>
 
           <div className="flex items-center gap-2">

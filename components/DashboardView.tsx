@@ -42,6 +42,7 @@ interface DashboardViewProps {
   sabbaths: SabbathDate[];
   criteriaConfig: CriteriaPointsConfig;
   selectedQuarter?: number;
+  selectedYear?: number;
   onNavigate: (tab: string) => void;
 }
 
@@ -54,6 +55,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   sabbaths,
   criteriaConfig,
   selectedQuarter = 1,
+  selectedYear = 2026,
   onNavigate,
 }) => {
   // Seletor de Visão: 'ALL' (Média Geral da Igreja) ou ID da Unidade/Classe
@@ -65,7 +67,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const professoresCount = members.filter((m) => m.isTeacher).length;
 
   // Calculate date bounds for selected quarter
-  const getQuarterBounds = (quarter: number, year = 2026) => {
+  const getQuarterBounds = (quarter: number, year = selectedYear) => {
     const q = Math.min(Math.max(quarter, 1), 4);
     const bounds = {
       1: { start: `${year}-01-01`, end: `${year}-03-31` },
@@ -76,7 +78,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return bounds[q as 1 | 2 | 3 | 4];
   };
 
-  const quarterBounds = getQuarterBounds(selectedQuarter, 2026);
+  const quarterBounds = getQuarterBounds(selectedQuarter, selectedYear);
 
   // Sabbaths for the selected quarter
   const quarterSabbaths = sabbaths.filter(
@@ -196,7 +198,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="space-y-1.5">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[10px] uppercase font-extrabold tracking-widest text-[#f3e5ab] bg-white/10 px-2.5 py-0.5 rounded-full border border-white/20">
-              Painel Geral • {selectedQuarter}º Trimestre 2026
+              Painel Geral • {selectedQuarter}º Trimestre {selectedYear}
             </span>
             {selectedVision !== 'ALL' && (
               <span className="text-[10px] uppercase font-extrabold text-amber-200 bg-amber-500/30 px-2.5 py-0.5 rounded-full border border-amber-300/40">

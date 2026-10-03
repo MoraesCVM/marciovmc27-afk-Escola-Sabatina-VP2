@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { SabbathDate } from '@/lib/types';
-import { SABBATHS_2026 } from '@/lib/data';
+import { SABBATHS_2026, AVAILABLE_YEARS } from '@/lib/data';
 import { Calendar, FileUp, CheckCircle2, Search, RotateCcw, AlertTriangle, Edit3, Save, X, FileText, Sparkles, Gift, User, Building2 } from 'lucide-react';
 
 const isGarbage = (text: string) => {
@@ -19,14 +19,18 @@ const sanitizeText = (str: string) => {
 interface CalendarViewProps {
   sabbaths: SabbathDate[];
   selectedQuarter?: number;
+  selectedYear?: number;
   onSelectQuarter?: (q: number) => void;
+  onSelectYear?: (y: number) => void;
   onUpdateSabbaths: (newSabbaths: SabbathDate[]) => void;
 }
 
 export const CalendarView: React.FC<CalendarViewProps> = ({
   sabbaths,
   selectedQuarter: propSelectedQuarter,
+  selectedYear = 2026,
   onSelectQuarter,
+  onSelectYear,
   onUpdateSabbaths,
 }) => {
   const [internalQuarter, setInternalQuarter] = useState<1 | 2 | 3 | 4>(1);
@@ -374,10 +378,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         <div>
           <h2 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2">
             <Calendar className="w-5 h-5 text-[#6b1d2f]" />
-            Calendário Informativo da Escola Sabatina 2026
+            Calendário Informativo da Escola Sabatina {selectedYear}
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            Escala Trimestral (1 folha por trimestre): Departamento responsável, Diretor(a) encarregado(a) e Programação de cada Sábado.
+            Escala Trimestral ({selectedYear}): Departamento responsável, Diretor(a) encarregado(a) e Programação de cada Sábado.
           </p>
         </div>
 
@@ -405,23 +409,40 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
       {/* 2. Quarter Tabs & Search */}
       <div className="bg-white p-3.5 rounded-2xl border border-gray-200/80 shadow-xs space-y-3">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          {/* Quarter Segmented Buttons */}
-          <div className="inline-flex p-1 bg-gray-100 rounded-xl border border-gray-200 w-full sm:w-auto">
-            {[1, 2, 3, 4].map((q) => (
-              <button
-                key={q}
-                type="button"
-                onClick={() => handleQuarterChange(q as 1 | 2 | 3 | 4)}
-                className={`flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                  activeQuarter === q
-                    ? 'bg-[#6b1d2f] text-white shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Year Select Buttons */}
+            <div className="inline-flex p-1 bg-gray-100 rounded-xl border border-gray-200">
+              <select
+                value={selectedYear}
+                onChange={(e) => onSelectYear?.(parseInt(e.target.value))}
+                className="bg-[#6b1d2f] text-[#D4AF37] text-xs font-bold px-3 py-1.5 rounded-lg border-0 focus:outline-none cursor-pointer"
               >
-                {q}º Trimestre
-              </button>
-            ))}
+                {AVAILABLE_YEARS.map((y) => (
+                  <option key={y} value={y} className="bg-white text-gray-900 font-bold">
+                    Ano {y}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Quarter Segmented Buttons */}
+            <div className="inline-flex p-1 bg-gray-100 rounded-xl border border-gray-200 flex-1 sm:flex-none">
+              {[1, 2, 3, 4].map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => handleQuarterChange(q as 1 | 2 | 3 | 4)}
+                  className={`flex-1 sm:flex-none px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    activeQuarter === q
+                      ? 'bg-[#6b1d2f] text-white shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  {q}º Trim
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="relative w-full sm:w-72">

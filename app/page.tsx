@@ -68,6 +68,8 @@ import {
   INITIAL_ROLLCALL,
   DEFAULT_CRITERIA_CONFIG,
   INITIAL_UNIT_WEEKLY_DATA,
+  AVAILABLE_YEARS,
+  getSabbathsForYear,
 } from '@/lib/data';
 
 import {
@@ -111,7 +113,14 @@ export default function Home() {
   const [criteriaConfig, setCriteriaConfig] = useState<CriteriaPointsConfig>(DEFAULT_CRITERIA_CONFIG);
 
   const [selectedQuarter, setSelectedQuarter] = useState<number>(1);
+  const [selectedYear, setSelectedYear] = useState<number>(2026);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+
+  // Active Sabbaths computed for the currently selected year
+  const activeSabbaths = React.useMemo(
+    () => getSabbathsForYear(selectedYear, sabbaths),
+    [selectedYear, sabbaths]
+  );
 
   // Check saved session on mount & subscribe to Supabase auth state
   useEffect(() => {
@@ -628,7 +637,7 @@ export default function Home() {
             }`}
           >
             <Calendar className="w-4 h-4 text-[#D4AF37]" />
-            <span>Calendário 2026</span>
+            <span>Calendário {selectedYear}</span>
           </button>
 
           <button
@@ -729,7 +738,7 @@ export default function Home() {
                 {activeTab === 'membros' && 'Gestão de Membros e Visitantes'}
                 {activeTab === 'frequencia' && 'Lançamento de Chamada Semanal'}
                 {activeTab === 'classes' && 'Classes e Unidades de Estudo'}
-                {activeTab === 'calendario' && 'Calendário Oficial 2026'}
+                {activeTab === 'calendario' && `Calendário Oficial ${selectedYear}`}
                 {activeTab === 'mana' && 'Controle de Assinaturas Maná'}
                 {activeTab === 'ia' && 'Assistente de Inteligência Teológica'}
                 {activeTab === 'gestao' && 'Gestão de Usuários & Permissões'}
@@ -737,7 +746,7 @@ export default function Home() {
             </div>
 
             <span className="bg-[#F5F2ED] text-[#D4AF37] border border-[#D4AF37]/40 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider hidden sm:inline-block">
-              {selectedQuarter}º Trimestre 2026
+              {selectedQuarter}º Trimestre {selectedYear}
             </span>
           </div>
 
@@ -785,17 +794,35 @@ export default function Home() {
               <LogOut className="w-4 h-4" />
             </button>
 
+            {/* Year Selector Dropdown */}
+            <div className="relative">
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                className="bg-[#600010] text-[#D4AF37] text-xs font-bold px-3 py-1.5 rounded-xl border border-[#D4AF37]/50 focus:outline-none appearance-none pr-7 cursor-pointer hover:bg-[#720013] transition shadow-xs"
+                title="Selecionar Ano"
+              >
+                {AVAILABLE_YEARS.map((y) => (
+                  <option key={y} value={y} className="bg-white text-gray-900 font-bold">
+                    Ano {y}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 text-[#D4AF37] absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+
             {/* Trimestre Selector Dropdown */}
             <div className="relative">
               <select
                 value={selectedQuarter}
                 onChange={(e) => setSelectedQuarter(parseInt(e.target.value))}
-                className="bg-[#F5F2ED] text-[#600010] text-xs font-bold px-3 py-1.5 rounded-xl border border-gray-300 focus:outline-none appearance-none pr-7 cursor-pointer"
+                className="bg-[#F5F2ED] text-[#600010] text-xs font-bold px-3 py-1.5 rounded-xl border border-gray-300 focus:outline-none appearance-none pr-7 cursor-pointer hover:bg-gray-100 transition shadow-xs"
+                title="Selecionar Trimestre"
               >
-                <option value={1}>1º Trim 2026</option>
-                <option value={2}>2º Trim 2026</option>
-                <option value={3}>3º Trim 2026</option>
-                <option value={4}>4º Trim 2026</option>
+                <option value={1}>1º Trim {selectedYear}</option>
+                <option value={2}>2º Trim {selectedYear}</option>
+                <option value={3}>3º Trim {selectedYear}</option>
+                <option value={4}>4º Trim {selectedYear}</option>
               </select>
               <ChevronDown className="w-3.5 h-3.5 text-[#600010] absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
@@ -858,9 +885,10 @@ export default function Home() {
               rollCallRecords={rollCallRecords}
               unitWeeklyData={unitWeeklyData}
               manaSubscriptions={manaSubscriptions}
-              sabbaths={sabbaths}
+              sabbaths={activeSabbaths}
               criteriaConfig={criteriaConfig}
               selectedQuarter={selectedQuarter}
+              selectedYear={selectedYear}
               onNavigate={(tab) => setActiveTab(tab)}
             />
           )}
@@ -891,11 +919,13 @@ export default function Home() {
             <RollCallView
               members={members}
               classes={classes}
-              sabbaths={sabbaths}
+              sabbaths={activeSabbaths}
               rollCallRecords={rollCallRecords}
               unitWeeklyData={unitWeeklyData}
               criteriaConfig={criteriaConfig}
               selectedQuarter={selectedQuarter}
+              selectedYear={selectedYear}
+              onSelectYear={(y) => setSelectedYear(y)}
               onSaveRollCall={handleSaveRollCall}
               onSaveUnitWeeklyData={handleSaveUnitWeeklyData}
               onSaveCriteriaConfig={handleSaveCriteriaConfig}
@@ -904,9 +934,11 @@ export default function Home() {
 
           {activeTab === 'calendario' && (
             <CalendarView
-              sabbaths={sabbaths}
+              sabbaths={activeSabbaths}
               selectedQuarter={selectedQuarter}
+              selectedYear={selectedYear}
               onSelectQuarter={(q) => setSelectedQuarter(q)}
+              onSelectYear={(y) => setSelectedYear(y)}
               onUpdateSabbaths={(updated) => {
                 setSabbaths(updated);
                 saveSabbaths(updated);
@@ -928,7 +960,9 @@ export default function Home() {
               onUpdateManaStatus={handleUpdateManaStatus}
               onSaveLessonCatalog={handleSaveLessonCatalog}
               selectedQuarter={selectedQuarter}
+              selectedYear={selectedYear}
               onSelectQuarter={(q) => setSelectedQuarter(q)}
+              onSelectYear={(y) => setSelectedYear(y)}
             />
           )}
 

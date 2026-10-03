@@ -283,6 +283,90 @@ export const INITIAL_MEMBERS: Member[] = [
   },
 ];
 
+// Available Years in the application
+export const AVAILABLE_YEARS = [2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032];
+
+// Generate 52 Saturdays of any given year (e.g. 2025, 2026, 2027, 2028, 2029, 2030)
+export function generateSabbathsForYear(targetYear: number): SabbathDate[] {
+  const sabbaths: SabbathDate[] = [];
+  
+  // Find first Saturday of the target year
+  const date = new Date(targetYear, 0, 1);
+  while (date.getDay() !== 6) {
+    date.setDate(date.getDate() + 1);
+  }
+
+  const qCounter = { 1: 0, 2: 0, 3: 0, 4: 0 };
+
+  const monthNamesPt = [
+    'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
+    'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'
+  ];
+
+  const defaultDepartments = [
+    'Escola Sabatina', 'Ministério Pessoal', 'Diaconisas', 'Comunicação',
+    'Ministério da Saúde', 'Pequenos Grupos', 'Evangelismo & Retiro', 'Publicações',
+    'Ministério da Mulher', 'Recepção', 'Mordomia Cristã', 'Ministério Jovem (JA)',
+    'Adolescentes / Infantil'
+  ];
+
+  const defaultDirectors = [
+    'Bruna Silva', 'Fernandes Ramos', 'Aliny Franca', 'Nalbert Vitor',
+    'Edney de Araújo', 'Assunção', 'Mattheus', 'Marlete Moraes',
+    'Walter Garces', 'Marcio Victor', 'Pr. Ricardo Santos', 'Heloísa Ribeiro'
+  ];
+
+  while (date.getFullYear() === targetYear) {
+    const month = date.getMonth(); // 0 to 11
+    const day = date.getDate();
+    const quarter = (Math.floor(month / 3) + 1) as 1 | 2 | 3 | 4;
+    
+    qCounter[quarter]++;
+    const sabbathNumber = qCounter[quarter];
+
+    const yyyy = date.getFullYear();
+    const mm = String(month + 1).padStart(2, '0');
+    const dd = String(day).padStart(2, '0');
+    const dateStr = `${yyyy}-${mm}-${dd}`;
+    const formattedStr = `${dd}/${monthNamesPt[month]}/${yyyy}`;
+
+    let specialEvent: string | undefined = undefined;
+    let notes: string | undefined = undefined;
+    let targetOffering: number | undefined = undefined;
+
+    if (sabbathNumber === 13 || (quarter === 4 && sabbathNumber >= 12)) {
+      specialEvent = `Programa de 13º Sábado (${quarter}º Trimestre ${targetYear})`;
+      notes = `Celebração de encerramento do ${quarter}º Trimestre de ${targetYear} e oferta especial missionária.`;
+      targetOffering = 3000 + quarter * 500;
+    } else if (month === 4 && day >= 8 && day <= 14) {
+      specialEvent = 'Sábado Especial das Mães';
+    } else if (month === 7 && day >= 8 && day <= 14) {
+      specialEvent = 'Sábado Especial dos Pais';
+    } else if (month === 8 && sabbathNumber === 10) {
+      specialEvent = 'Batismo da Primavera';
+    }
+
+    const dept = defaultDepartments[(sabbathNumber - 1) % defaultDepartments.length];
+    const director = defaultDirectors[(sabbathNumber - 1) % defaultDirectors.length];
+
+    sabbaths.push({
+      date: dateStr,
+      formattedDate: formattedStr,
+      quarter,
+      sabbathNumberInQuarter: sabbathNumber,
+      department: dept,
+      directorName: director,
+      specialEvent,
+      notes,
+      targetOffering,
+    });
+
+    date.setDate(date.getDate() + 7);
+  }
+
+  return sabbaths;
+}
+
 // Generate 52 Saturdays of 2026 (Escala Informativa de Escola Sabatina por Departamento e Diretor)
 export const SABBATHS_2026: SabbathDate[] = [
   // Q1 2026 (Escala Trimestral)
@@ -345,6 +429,20 @@ export const SABBATHS_2026: SabbathDate[] = [
   { date: '2026-12-19', formattedDate: '19/Dez/2026', quarter: 4, sabbathNumberInQuarter: 12, department: 'Ministério da Família', directorName: 'Pr. Ricardo Santos', notes: 'Gratidão anual pelas famílias da igreja.' },
   { date: '2026-12-26', formattedDate: '26/Dez/2026', quarter: 4, sabbathNumberInQuarter: 13, department: 'Escola Sabatina (Diretoria)', directorName: 'Marcos Silva', specialEvent: '13º Sábado de Fim de Ano', notes: 'Encerramento triunfal do ano letivo de 2026.', targetOffering: 5000 },
 ];
+
+export function getSabbathsForYear(targetYear: number, customSabbaths?: SabbathDate[]): SabbathDate[] {
+  const prefix = `${targetYear}-`;
+  if (customSabbaths && customSabbaths.length > 0) {
+    const yearSabbaths = customSabbaths.filter((s) => s.date.startsWith(prefix));
+    if (yearSabbaths.length > 0) {
+      return yearSabbaths;
+    }
+  }
+  if (targetYear === 2026) {
+    return SABBATHS_2026;
+  }
+  return generateSabbathsForYear(targetYear);
+}
 
 export const INITIAL_LESSON_CATALOG: LessonCatalogItem[] = [
   { id: 'cat-1', name: 'Lição de Adultos - Aluno', category: 'Adultos', price: 38.0, code: 'CPB-01' },

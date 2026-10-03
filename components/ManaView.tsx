@@ -11,6 +11,7 @@ import {
   ManaPayment,
   ClassUnit,
 } from '@/lib/types';
+import { AVAILABLE_YEARS } from '@/lib/data';
 import { ManaExcelImportView } from '@/components/ManaExcelImportView';
 import {
   BookMarked,
@@ -68,7 +69,9 @@ interface ManaViewProps {
   ) => void;
   onSaveLessonCatalog: (updatedCatalog: LessonCatalogItem[]) => void;
   selectedQuarter: number;
+  selectedYear?: number;
   onSelectQuarter: (quarter: number) => void;
+  onSelectYear?: (year: number) => void;
 }
 
 export const ManaView: React.FC<ManaViewProps> = ({
@@ -84,7 +87,9 @@ export const ManaView: React.FC<ManaViewProps> = ({
   onUpdateManaStatus,
   onSaveLessonCatalog,
   selectedQuarter,
+  selectedYear = 2026,
   onSelectQuarter,
+  onSelectYear,
 }) => {
   // Main view active tab: 'pedidos' | 'unidades' | 'importar' | 'cadastro' | 'relatorio'
   const [activeTab, setActiveTab] = useState<'pedidos' | 'unidades' | 'importar' | 'cadastro' | 'relatorio'>('pedidos');
@@ -1078,7 +1083,7 @@ export const ManaView: React.FC<ManaViewProps> = ({
       <html lang="pt-BR">
         <head>
           <meta charset="utf-8" />
-          <title>Relatório Maná 2026 - ${selectedQuarter}º Trimestre</title>
+          <title>Relatório Maná ${selectedYear} - ${selectedQuarter}º Trimestre</title>
           <style>
             body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 25px; color: #111827; background: #ffffff; line-height: 1.5; }
             .no-print-bar { display: flex; items-center: center; justify-content: space-between; gap: 10px; margin-bottom: 24px; padding: 14px 18px; background: #111827; color: #ffffff; border-radius: 12px; }
@@ -1111,7 +1116,7 @@ export const ManaView: React.FC<ManaViewProps> = ({
         <body>
           <div class="no-print-bar">
             <div>
-              <strong>Relatório de Impressão Maná 2026</strong> — ${selectedQuarter}º Trimestre
+              <strong>Relatório de Impressão Maná ${selectedYear}</strong> — ${selectedQuarter}º Trimestre
             </div>
             <div style="display: flex; gap: 8px;">
               <button class="btn" onclick="window.print()">🖨️ Imprimir Agora / Salvar PDF</button>
@@ -1121,9 +1126,9 @@ export const ManaView: React.FC<ManaViewProps> = ({
 
           <div class="header">
             <h1>Igreja Adventista do Sétimo Dia • Escola Sabatina</h1>
-            <h2>RELATÓRIO FINANCEIRO & CONSOLIDAÇÃO DE PEDIDOS — PROJETO MANÁ (2026)</h2>
+            <h2>RELATÓRIO FINANCEIRO & CONSOLIDAÇÃO DE PEDIDOS — PROJETO MANÁ (${selectedYear})</h2>
             <div class="meta">
-              <span>Periodo: ${selectedQuarter}º Trimestre 2026</span>
+              <span>Periodo: ${selectedQuarter}º Trimestre ${selectedYear}</span>
               <span>Data de Emissão: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</span>
             </div>
           </div>
@@ -1263,7 +1268,7 @@ export const ManaView: React.FC<ManaViewProps> = ({
 
   // Copy plain text summary
   const handleCopyReportText = () => {
-    let text = `*RELATÓRIO FINANCEIRO MANÁ 2026 - ${selectedQuarter}º TRIMESTRE*\n`;
+    let text = `*RELATÓRIO FINANCEIRO MANÁ ${selectedYear} - ${selectedQuarter}º TRIMESTRE*\n`;
     text += `Data de Emissão: ${new Date().toLocaleDateString('pt-BR')}\n\n`;
     text += `*RESUMO GERAL:*\n`;
     text += `• Total Pedidos: ${totalOrdersCount}\n`;
@@ -1312,23 +1317,42 @@ export const ManaView: React.FC<ManaViewProps> = ({
             </p>
           </div>
 
-          {/* Quarter Selector */}
-          <div className="bg-black/30 backdrop-blur-md p-2 rounded-2xl border border-white/15 flex items-center gap-1 shrink-0 self-stretch lg:self-auto justify-between lg:justify-start">
-            <span className="text-[11px] font-bold text-[#f3e5ab] px-2 hidden sm:inline">Trimestre:</span>
-            {[1, 2, 3, 4].map((q) => (
-              <button
-                key={q}
-                type="button"
-                onClick={() => onSelectQuarter(q)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                  selectedQuarter === q
-                    ? 'bg-[#d4af37] text-gray-950 shadow-md scale-105'
-                    : 'text-white/80 hover:text-white hover:bg-white/10'
-                }`}
+          {/* Year & Quarter Selectors */}
+          <div className="flex flex-wrap items-center gap-2 shrink-0 self-stretch lg:self-auto">
+            {/* Year Selector */}
+            <div className="bg-black/30 backdrop-blur-md p-1.5 rounded-2xl border border-white/15 flex items-center">
+              <select
+                value={selectedYear}
+                onChange={(e) => onSelectYear?.(parseInt(e.target.value))}
+                className="bg-[#d4af37] text-gray-950 text-xs font-black px-3 py-1.5 rounded-xl border-0 focus:outline-none cursor-pointer"
+                title="Selecionar Ano Letivo"
               >
-                {q}º Trim
-              </button>
-            ))}
+                {AVAILABLE_YEARS.map((y) => (
+                  <option key={y} value={y} className="bg-white text-gray-900 font-bold">
+                    Ano {y}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Quarter Selector */}
+            <div className="bg-black/30 backdrop-blur-md p-2 rounded-2xl border border-white/15 flex items-center gap-1 shrink-0 justify-between lg:justify-start">
+              <span className="text-[11px] font-bold text-[#f3e5ab] px-2 hidden sm:inline">Trimestre:</span>
+              {[1, 2, 3, 4].map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => onSelectQuarter(q)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                    selectedQuarter === q
+                      ? 'bg-[#d4af37] text-gray-950 shadow-md scale-105'
+                      : 'text-white/80 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  {q}º Trim
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -2407,10 +2431,10 @@ export const ManaView: React.FC<ManaViewProps> = ({
               Igreja Adventista do Sétimo Dia • Escola Sabatina
             </h1>
             <h2 className="text-sm font-bold text-gray-700">
-              RELATÓRIO FINANCEIRO & CONSOLIDAÇÃO DE PEDIDOS — PROJETO MANÁ (2026)
+              RELATÓRIO FINANCEIRO & CONSOLIDAÇÃO DE PEDIDOS — PROJETO MANÁ ({selectedYear})
             </h2>
             <div className="flex items-center justify-between text-[11px] text-gray-500 pt-2 font-mono">
-              <span>{selectedQuarter}º Trimestre 2026</span>
+              <span>{selectedQuarter}º Trimestre {selectedYear}</span>
               <span>Gerado em: {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}</span>
             </div>
           </div>
@@ -3764,7 +3788,7 @@ export const ManaView: React.FC<ManaViewProps> = ({
                     Visualizador de Relatório Maná
                   </h3>
                   <p className="text-xs text-amber-200/90 font-medium">
-                    {selectedQuarter}º Trimestre 2026 • Pronto para Impressão e PDF
+                    {selectedQuarter}º Trimestre {selectedYear} • Pronto para Impressão e PDF
                   </p>
                 </div>
               </div>
@@ -3825,10 +3849,10 @@ export const ManaView: React.FC<ManaViewProps> = ({
                   Igreja Adventista do Sétimo Dia • Escola Sabatina
                 </h1>
                 <h2 className="text-sm font-bold text-gray-700">
-                  RELATÓRIO FINANCEIRO & CONSOLIDAÇÃO DE PEDIDOS — PROJETO MANÁ (2026)
+                  RELATÓRIO FINANCEIRO & CONSOLIDAÇÃO DE PEDIDOS — PROJETO MANÁ ({selectedYear})
                 </h2>
                 <div className="flex items-center justify-between text-[11px] text-gray-500 pt-2 font-mono">
-                  <span>{selectedQuarter}º Trimestre 2026</span>
+                  <span>{selectedQuarter}º Trimestre {selectedYear}</span>
                   <span>Gerado em: {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}</span>
                 </div>
               </div>
@@ -3995,6 +4019,7 @@ export const ManaView: React.FC<ManaViewProps> = ({
           onClose={() => setDeliveryModalOrder(null)}
           order={deliveryModalOrder}
           initialQuarter={deliveryModalQuarter}
+          selectedYear={selectedYear}
           onSaveDelivery={handleSaveDeliveryAttachment}
           members={members}
         />

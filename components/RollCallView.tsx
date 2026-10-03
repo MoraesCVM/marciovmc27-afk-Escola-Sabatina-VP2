@@ -16,6 +16,7 @@ import {
   calculateOfferingPoints,
   calculateUnitFinalScore,
 } from '@/lib/types';
+import { AVAILABLE_YEARS, getSabbathsForYear } from '@/lib/data';
 import {
   CriteriaConfigModal,
   renderCriterionIcon,
@@ -49,13 +50,15 @@ import {
   Sparkles,
   Layers,
   Filter,
+  GraduationCap,
+  TrendingUp,
 } from 'lucide-react';
 
 export interface ParsedRollCallItem extends RollCallRecord {
-  quarter: 1 | 2 | 3 | 4;
+  quarter: number;
   sabbathNumberInQuarter: number;
   formattedDisplayDate: string;
-  className?: string;
+  className: string;
   score: number;
 }
 
@@ -67,6 +70,8 @@ interface RollCallViewProps {
   unitWeeklyData?: UnitWeeklyData[];
   criteriaConfig: CriteriaPointsConfig;
   selectedQuarter?: number;
+  selectedYear?: number;
+  onSelectYear?: (year: number) => void;
   onSaveRollCall: (records: RollCallRecord[]) => void;
   onSaveUnitWeeklyData?: (data: UnitWeeklyData) => void;
   onSaveCriteriaConfig: (newConfig: CriteriaPointsConfig) => void;
@@ -80,6 +85,8 @@ export const RollCallView: React.FC<RollCallViewProps> = ({
   unitWeeklyData = [],
   criteriaConfig,
   selectedQuarter = 1,
+  selectedYear = 2026,
+  onSelectYear,
   onSaveRollCall,
   onSaveUnitWeeklyData,
   onSaveCriteriaConfig,
@@ -159,6 +166,26 @@ export const RollCallView: React.FC<RollCallViewProps> = ({
     return str;
   };
 
+  const parseYearValue = (val: any): number | null => {
+    if (val === null || val === undefined) return null;
+    const str = String(val).trim();
+    const match = str.match(/\b(20\d{2})\b/);
+    if (match) {
+      const y = parseInt(match[1], 10);
+      if (y >= 2020 && y <= 2040) return y;
+    }
+    return null;
+  };
+
+  const parseNumericValue = (val: any): number => {
+    if (val === null || val === undefined) return 0;
+    if (typeof val === 'number') return isNaN(val) ? 0 : val;
+    const clean = String(val).trim().replace('R$', '').replace('$', '').replace('pts', '').replace('pt', '').trim();
+    const normalized = clean.replace(',', '.');
+    const num = parseFloat(normalized);
+    return isNaN(num) ? 0 : Math.max(0, num);
+  };
+
   const resolveSabbathAndQuarter = (
     rawQuarterVal: any,
     rawSabbathNumVal: any,
@@ -192,7 +219,7 @@ export const RollCallView: React.FC<RollCallViewProps> = ({
       }
     }
 
-    // 2. If Quarter and Sabbath Number are given (e.g., Trimestre 1, Sábado 3)
+    // 2. If Quarter and Sabbath Number are given
     if (parsedQuarter && parsedSabbathNum) {
       const matchedSabbath = sabbaths.find(
         (s) => s.quarter === parsedQuarter && s.sabbathNumberInQuarter === parsedSabbathNum
@@ -252,14 +279,37 @@ export const RollCallView: React.FC<RollCallViewProps> = ({
 
   const parseOffering = (val: string): { broughtOffering: boolean; offeringAmount: number } => {
     if (!val) return { broughtOffering: false, offeringAmount: 0 };
-    const clean = val.trim().replace('R$', '').replace('$', '').trim();
+    const str = String(val).toLowerCase().trim();
+    if (
+      str === 'sim' ||
+      str === 's' ||
+      str === '1' ||
+      str === 'true' ||
+      str === 'x' ||
+      str === 'v' ||
+      str === 'p' ||
+      str === 'ofertou' ||
+      str === 'oferta'
+    ) {
+      return { broughtOffering: true, offeringAmount: 0 };
+    }
+    if (
+      str === 'nao' ||
+      str === 'não' ||
+      str === 'n' ||
+      str === '0' ||
+      str === 'false' ||
+      str === '-' ||
+      str === 'sem oferta'
+    ) {
+      return { broughtOffering: false, offeringAmount: 0 };
+    }
+    // Compatibilidade caso venha algum valor numérico
+    const clean = str.replace('r$', '').replace('$', '').trim();
     const normalizedNum = clean.replace(',', '.');
     const num = parseFloat(normalizedNum);
-    if (!isNaN(num) && num >= 0) {
-      return { broughtOffering: true, offeringAmount: num };
-    }
-    if (parseBool(val)) {
-      return { broughtOffering: true, offeringAmount: 0 };
+    if (!isNaN(num)) {
+      return { broughtOffering: num > 0, offeringAmount: Math.max(0, num) };
     }
     return { broughtOffering: false, offeringAmount: 0 };
   };
@@ -270,9 +320,9 @@ export const RollCallView: React.FC<RollCallViewProps> = ({
       return;
     }
 
-    // Find header row in first 5 rows
+    // Find header row in first 6 rows
     let headerRowIdx = 0;
-    for (let r = 0; r < Math.min(5, rows.length); r++) {
+    for (let r = 0; r < Math.min(6, rows.length); r++) {
       const rowStr = rows[r].map((c) => String(c).toLowerCase()).join(' ');
       if (
         rowStr.includes('nome') ||
@@ -301,42 +351,37 @@ export const RollCallView: React.FC<RollCallViewProps> = ({
     let pgIdx = -1;
 
     header.forEach((col, idx) => {
-      if (col.includes('trimestre') || col.includes('trim') || col.includes('quarter')) {
+      const c = col.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+      if (c.includes('trimestre') || c.includes('trim') || c.includes('quarter')) {
         quarterIdx = idx;
       } else if (
-        col.includes('sábado nº') ||
-        col.includes('sabado nº') ||
-        col.includes('nº sábado') ||
-        col.includes('nº sabado') ||
-        col.includes('semana') ||
-        col.includes('lição nº') ||
-        col.includes('licao nº') ||
-        (col.includes('sábado') && !col.includes('data')) ||
-        (col.includes('sabado') && !col.includes('data'))
+        c.includes('sabado no') ||
+        c.includes('no sabado') ||
+        c.includes('num sabado') ||
+        c.includes('semana') ||
+        c.includes('licao no') ||
+        (c.includes('sabado') && !c.includes('data'))
       ) {
         sabbathNumIdx = idx;
-      } else if (col.includes('data')) {
+      } else if (c.includes('data')) {
         dateIdx = idx;
-      } else if (col.includes('nome') || col.includes('membro') || col.includes('aluno')) {
+      } else if (c.includes('nome') || c.includes('membro') || c.includes('aluno')) {
         nameIdx = idx;
-      } else if (col.includes('classe') || col.includes('unidade') || col.includes('turma')) {
+      } else if (c.includes('classe') || c.includes('unidade') || c.includes('turma')) {
         classIdx = idx;
-      } else if (col.includes('presen') || col.includes('compare')) {
+      } else if (c.includes('presen') || c.includes('compare')) {
         presentIdx = idx;
-      } else if (col.includes('pontu') || col.includes('horário') || col.includes('horario') || col.includes('atras')) {
+      } else if (c.includes('pontu') || c.includes('horario') || c.includes('atras')) {
         punctualIdx = idx;
-      } else if (col.includes('liç') || col.includes('lic') || col.includes('estud')) {
+      } else if (c.includes('lic') || c.includes('estud')) {
         lessonIdx = idx;
-      } else if (col.includes('ofer') || col.includes('valor')) {
+      } else if (c.includes('ofer') || c.includes('valor')) {
         offeringIdx = idx;
-      } else if (col.includes('pg') || col.includes('pequen') || col.includes('grupo')) {
+      } else if (c.includes('pg') || c.includes('pequen') || c.includes('grupo')) {
         pgIdx = idx;
       }
     });
-
-    if (nameIdx === -1) {
-      nameIdx = 0;
-    }
 
     const parsedItems: ParsedRollCallItem[] = [];
 
@@ -344,18 +389,18 @@ export const RollCallView: React.FC<RollCallViewProps> = ({
       const row = rows[i];
       if (!row || row.length === 0) continue;
 
-      const rawName = String(row[nameIdx] || '').trim();
-      if (!rawName) continue;
-
       const rawQuarter = quarterIdx >= 0 ? row[quarterIdx] : undefined;
       const rawSabbathNum = sabbathNumIdx >= 0 ? row[sabbathNumIdx] : undefined;
       const rawDate = dateIdx >= 0 ? row[dateIdx] : undefined;
       const rawClass = classIdx >= 0 ? String(row[classIdx] || '').trim() : '';
+      const rawName = nameIdx >= 0 ? String(row[nameIdx] || '').trim() : '';
       const rawPresent = presentIdx >= 0 ? row[presentIdx] : 'sim';
       const rawPunctual = punctualIdx >= 0 ? row[punctualIdx] : 'sim';
       const rawLesson = lessonIdx >= 0 ? row[lessonIdx] : 'sim';
       const rawOffering = offeringIdx >= 0 ? row[offeringIdx] : '0';
       const rawPG = pgIdx >= 0 ? row[pgIdx] : 'sim';
+
+      if (!rawName) continue;
 
       const { sabbathDate, quarter, sabbathNumberInQuarter } = resolveSabbathAndQuarter(
         rawQuarter,
@@ -364,7 +409,6 @@ export const RollCallView: React.FC<RollCallViewProps> = ({
         selectedDate
       );
 
-      // Member matching
       const matchedMember =
         members.find((m) => m.name.toLowerCase().trim() === rawName.toLowerCase().trim()) ||
         members.find((m) => m.name.toLowerCase().includes(rawName.toLowerCase().trim()));
@@ -372,21 +416,26 @@ export const RollCallView: React.FC<RollCallViewProps> = ({
       const memberName = matchedMember ? matchedMember.name : rawName;
       const memberId = matchedMember ? matchedMember.id : `mb-imp-${Date.now()}-${i}`;
 
-      let classId = selectedClassId;
       let className = rawClass;
-      if (matchedMember) {
-        className = matchedMember.className || matchedMember.unit || rawClass;
+      let classId = selectedClassId;
+      if (rawClass) {
+        const found = classes.find(
+          (c) =>
+            c.name.toLowerCase() === rawClass.toLowerCase() ||
+            c.name.toLowerCase().includes(rawClass.toLowerCase()) ||
+            rawClass.toLowerCase().includes(c.name.toLowerCase()) ||
+            c.id.toLowerCase() === rawClass.toLowerCase()
+        );
+        if (found) {
+          classId = found.id;
+          className = found.name;
+        }
+      } else if (matchedMember) {
+        className = matchedMember.className || matchedMember.unit || className;
         const mClass = classes.find(
           (c) =>
             c.name.toLowerCase() === (matchedMember.className || '').toLowerCase() ||
             c.name.toLowerCase() === (matchedMember.unit || '').toLowerCase()
-        );
-        if (mClass) classId = mClass.id;
-      } else if (rawClass) {
-        const mClass = classes.find(
-          (c) =>
-            c.name.toLowerCase().includes(rawClass.toLowerCase()) ||
-            rawClass.toLowerCase().includes(c.name.toLowerCase())
         );
         if (mClass) classId = mClass.id;
       }
@@ -399,10 +448,10 @@ export const RollCallView: React.FC<RollCallViewProps> = ({
         : { broughtOffering: false, offeringAmount: 0 };
       const attendedPG = present ? parseBool(String(rawPG)) : false;
 
-      const recordId = `rc-${sabbathDate}-${memberId}`;
       const sabbathObj = sabbaths.find((s) => s.date === sabbathDate);
       const formattedDisplayDate = sabbathObj ? sabbathObj.formattedDate : sabbathDate;
 
+      const recordId = `rc-${sabbathDate}-${memberId}`;
       const record: RollCallRecord = {
         id: recordId,
         sabbathDate,
@@ -430,7 +479,7 @@ export const RollCallView: React.FC<RollCallViewProps> = ({
     }
 
     if (parsedItems.length === 0) {
-      setCsvError('Nenhum registro de chamada válido pôde ser extraído do arquivo.');
+      setCsvError('Nenhum dado válido de chamada pôde ser extraído do arquivo.');
       return;
     }
 
@@ -523,52 +572,64 @@ export const RollCallView: React.FC<RollCallViewProps> = ({
         updatedLocalMap[r.memberId] = r;
       }
     });
-
     setRecords(updatedLocalMap);
+
     setCsvSuccessMsg(
-      `${csvPreview.length} registro(s) de chamada importados com sucesso distribuídos nos trimestres correspondentes!`
+      `${csvPreview.length} registro(s) de chamada importados com sucesso nos trimestres correspondentes!`
     );
     setCsvPreview([]);
     setTimeout(() => {
       setIsCsvModalOpen(false);
       setCsvSuccessMsg(null);
-    }, 1500);
+    }, 1800);
   };
 
   const sampleQuarterData = [
-    ['Trimestre', 'Sábado Nº', 'Data do Sábado', 'Nome do Membro', 'Classe / Unidade', 'Presença', 'Pontualidade', 'Lição Estudada', 'Oferta (R$)', 'Pequeno Grupo'],
-    // 1º Trimestre (Janeiro a Março)
-    ['1', '1', '2026-01-03', 'Adriana Silva', 'Ebenézer (Adultos)', 'Sim', 'Sim', 'Sim', '20.00', 'Sim'],
-    ['1', '1', '2026-01-03', 'Bruno Oliveira', 'Maranata (Adultos)', 'Sim', 'Sim', 'Não', '10.00', 'Sim'],
-    ['1', '2', '2026-01-10', 'Adriana Silva', 'Ebenézer (Adultos)', 'Sim', 'Sim', 'Sim', '15.00', 'Sim'],
-    ['1', '2', '2026-01-10', 'Gabriel Rocha', 'Jovens - Geração Eleita', 'Sim', 'Não', 'Sim', '5.00', 'Não'],
-    // 2º Trimestre (Abril a Junho)
-    ['2', '1', '2026-04-04', 'Adriana Silva', 'Ebenézer (Adultos)', 'Sim', 'Sim', 'Sim', '25.00', 'Sim'],
-    ['2', '1', '2026-04-04', 'Diego Martins', 'Bereia (Adultos)', 'Sim', 'Sim', 'Sim', '10.00', 'Sim'],
-    ['2', '2', '2026-04-11', 'Heloísa Ribeiro', 'Adolescentes - Teen Zone', 'Sim', 'Sim', 'Sim', '10.00', 'Sim'],
-    // 3º Trimestre (Julho a Setembro)
-    ['3', '1', '2026-07-04', 'Adriana Silva', 'Ebenézer (Adultos)', 'Sim', 'Sim', 'Sim', '20.00', 'Sim'],
-    ['3', '1', '2026-07-04', 'Bruno Oliveira', 'Maranata (Adultos)', 'Sim', 'Sim', 'Sim', '15.00', 'Sim'],
-    ['3', '2', '2026-07-11', 'Pr. Ricardo Santos', 'Ebenézer (Adultos)', 'Sim', 'Sim', 'Sim', '30.00', 'Sim'],
+    [
+      'Trimestre',
+      'Sábado Nº',
+      'Data do Sábado',
+      'Classe / Unidade',
+      'Nome do Membro',
+      'Presença',
+      'Pontualidade',
+      'Lição Estudada',
+      'Oferta',
+      'Pequeno Grupo',
+    ],
+    // 1º Trimestre
+    ['1', '1', '2026-01-03', 'Ebenézer (Adultos)', 'Adriana Silva', 'Sim', 'Sim', 'Sim', 'Sim', 'Sim'],
+    ['1', '1', '2026-01-03', 'Ebenézer (Adultos)', 'Alba Regina', 'Sim', 'Sim', 'Não', 'Sim', 'Sim'],
+    ['1', '1', '2026-01-03', 'Maranata (Adultos)', 'Bruno Oliveira', 'Sim', 'Sim', 'Sim', 'Sim', 'Sim'],
+    ['1', '2', '2026-01-10', 'Ebenézer (Adultos)', 'Adriana Silva', 'Sim', 'Sim', 'Sim', 'Sim', 'Sim'],
+    ['1', '2', '2026-01-10', 'Jovens - Geração Eleita', 'Gabriel Rocha', 'Sim', 'Não', 'Sim', 'Não', 'Não'],
+    // 2º Trimestre
+    ['2', '1', '2026-04-04', 'Ebenézer (Adultos)', 'Adriana Silva', 'Sim', 'Sim', 'Sim', 'Sim', 'Sim'],
+    ['2', '1', '2026-04-04', 'Bereia (Adultos)', 'Diego Martins', 'Sim', 'Sim', 'Sim', 'Sim', 'Sim'],
+    ['2', '2', '2026-04-11', 'Adolescentes - Teen Zone', 'Heloísa Ribeiro', 'Sim', 'Sim', 'Sim', 'Sim', 'Sim'],
+    // 3º Trimestre
+    ['3', '1', '2026-07-04', 'Ebenézer (Adultos)', 'Adriana Silva', 'Sim', 'Sim', 'Sim', 'Sim', 'Sim'],
+    // 4º Trimestre
+    ['4', '1', '2026-10-03', 'Ebenézer (Adultos)', 'Adriana Silva', 'Sim', 'Sim', 'Sim', 'Sim', 'Sim'],
   ];
 
   const downloadSampleRollCallExcel = () => {
     const ws = XLSX.utils.aoa_to_sheet(sampleQuarterData);
     ws['!cols'] = [
-      { wch: 12 }, // Trimestre
-      { wch: 12 }, // Sábado Nº
-      { wch: 16 }, // Data do Sábado
-      { wch: 25 }, // Nome do Membro
-      { wch: 25 }, // Classe / Unidade
-      { wch: 12 }, // Presença
-      { wch: 14 }, // Pontualidade
-      { wch: 16 }, // Lição Estudada
-      { wch: 14 }, // Oferta (R$)
-      { wch: 14 }, // Pequeno Grupo
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 16 },
+      { wch: 28 },
+      { wch: 24 },
+      { wch: 12 },
+      { wch: 14 },
+      { wch: 16 },
+      { wch: 16 },
+      { wch: 15 },
     ];
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Chamada_Trimestres');
-    XLSX.writeFile(wb, 'modelo_chamada_semanal_por_trimestres.xlsx');
+    XLSX.utils.book_append_sheet(wb, ws, 'Chamada_Por_Trimestre');
+    XLSX.writeFile(wb, 'modelo_chamada_por_trimestre.xlsx');
   };
 
   const downloadSampleRollCallCSV = () => {
@@ -577,7 +638,7 @@ export const RollCallView: React.FC<RollCallViewProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', 'modelo_chamada_semanal_por_trimestres.csv');
+    link.setAttribute('download', 'modelo_chamada_por_trimestre.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1022,22 +1083,40 @@ export const RollCallView: React.FC<RollCallViewProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-3 border-t border-gray-100 items-end">
-          {/* Select Sabbath Date */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5 pt-3 border-t border-gray-100 items-end">
+          {/* Select Year */}
           <div className="space-y-1">
             <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1">
-              Data do Sábado
+              Ano Letivo
+            </label>
+            <select
+              value={selectedYear}
+              onChange={(e) => onSelectYear?.(parseInt(e.target.value))}
+              className="w-full px-3 py-2 bg-[#600010] text-[#D4AF37] border border-[#D4AF37]/50 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#D4AF37] cursor-pointer"
+            >
+              {AVAILABLE_YEARS.map((y) => (
+                <option key={y} value={y} className="bg-white text-gray-900 font-bold">
+                  Ano {y}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Select Sabbath Date */}
+          <div className="space-y-1 col-span-1 sm:col-span-2">
+            <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1">
+              Data do Sábado ({selectedYear})
             </label>
             <div className="relative">
-              <Calendar className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Calendar className="w-4 h-4 text-[#600010] absolute left-3 top-1/2 -translate-y-1/2" />
               <select
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-300 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#600010]"
+                className="w-full pl-9 pr-3 py-2 bg-amber-50/70 border border-amber-300 rounded-xl text-xs font-extrabold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#600010] cursor-pointer"
               >
                 {displayedSabbaths.map((s) => (
                   <option key={s.date} value={s.date}>
-                    {s.formattedDate} ({s.quarter}º Trimestre)
+                    Sábado {s.sabbathNumberInQuarter} — {s.formattedDate} ({s.quarter}º Trimestre {selectedYear})
                   </option>
                 ))}
               </select>
@@ -1506,10 +1585,10 @@ export const RollCallView: React.FC<RollCallViewProps> = ({
         onSaveConfig={onSaveCriteriaConfig}
       />
 
-      {/* CSV & Excel Import Modal for Chamada Semanal with Quarter Support */}
+      {/* CSV & Excel Import Modal for Chamada Semanal */}
       {isCsvModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl border border-gray-100 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-gray-100 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-800 shadow-2xs">
@@ -1517,13 +1596,13 @@ export const RollCallView: React.FC<RollCallViewProps> = ({
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                    <span>Importação de Chamadas por Trimestre</span>
+                    <span>Importar Chamada (Excel ou CSV)</span>
                     <span className="text-[10px] uppercase tracking-wider bg-emerald-100 text-emerald-800 font-extrabold px-2 py-0.5 rounded-md border border-emerald-300">
                       Excel / CSV
                     </span>
                   </h3>
                   <p className="text-xs text-gray-500">
-                    Importe pontuações e registros de trimestres anteriores (1º, 2º, 3º e 4º) com detecção automática da coluna de Trimestre e Sábado.
+                    Selecione ou arraste a planilha com as chamadas dos sábados.
                   </p>
                 </div>
               </div>
@@ -1535,7 +1614,7 @@ export const RollCallView: React.FC<RollCallViewProps> = ({
                   setCsvError(null);
                   setCsvSuccessMsg(null);
                 }}
-                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1575,15 +1654,12 @@ export const RollCallView: React.FC<RollCallViewProps> = ({
                   : 'border-gray-300 hover:border-emerald-500 bg-gray-50/50'
               }`}
             >
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <FileSpreadsheet className="w-8 h-8 text-emerald-700" />
-                <FileText className="w-7 h-7 text-amber-600" />
-              </div>
+              <FileSpreadsheet className="w-10 h-10 text-emerald-700 mx-auto mb-2 opacity-80" />
               <p className="text-sm font-bold text-gray-800">
-                Arraste a planilha de chamada aqui (.xlsx, .xls ou .csv)
+                Arraste sua planilha aqui (.xlsx, .xls ou .csv)
               </p>
-              <p className="text-xs text-gray-500 mt-1">
-                Suporta planilhas contendo dados de múltiplos trimestres (1º, 2º, 3º e 4º)
+              <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
+                Você pode importar a chamada de múltiplos sábados ou trimestres inteiros em um único arquivo.
               </p>
 
               <input
@@ -1610,211 +1686,189 @@ export const RollCallView: React.FC<RollCallViewProps> = ({
               </div>
             </div>
 
-            {/* Instruction Box with Column Guide & Download Templates */}
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-              <div className="flex items-start gap-2.5">
-                <AlertCircle className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
-                <div className="text-xs space-y-1.5 flex-1">
-                  <p className="font-bold text-gray-900">
-                    Estrutura com Coluna de Trimestre (Recomendada para importar períodos anteriores):
-                  </p>
-                  <div className="bg-white p-2 rounded-lg border border-slate-200 font-mono text-[11px] text-gray-800 overflow-x-auto">
-                    Trimestre | Sábado Nº | Data do Sábado | Nome do Membro | Classe / Unidade | Presença | Pontualidade | Lição Estudada | Oferta (R$) | Pequeno Grupo
-                  </div>
-                  <ul className="list-disc pl-4 text-[11px] text-gray-600 space-y-0.5">
-                    <li>
-                      <strong>Trimestre:</strong> preencha com <span className="text-emerald-700 font-bold">1, 2, 3</span> ou <span className="text-emerald-700 font-bold">4</span> (ou &quot;1º Trimestre&quot;, etc.).
-                    </li>
-                    <li>
-                      <strong>Sábado Nº:</strong> número do sábado no trimestre (1 a 13) <em>ou</em> informe a <strong>Data do Sábado</strong> (ex: <code className="bg-gray-100 px-1 rounded">2026-01-03</code> ou <code className="bg-gray-100 px-1 rounded">03/01/2026</code>).
-                    </li>
-                    <li>
-                      <strong>Critérios:</strong> aceita <code className="bg-gray-100 px-1 rounded">Sim</code> / <code className="bg-gray-100 px-1 rounded">Não</code>. Oferta aceita valor numérico (ex: <code className="bg-gray-100 px-1 rounded">15.00</code>).
-                    </li>
-                  </ul>
+            {/* Instruction Box with Sample Downloads */}
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
+                  Estrutura das Colunas da Planilha:
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={downloadSampleRollCallExcel}
+                    className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Baixar Modelo (.xlsx)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={downloadSampleRollCallCSV}
+                    className="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 border border-gray-300 text-gray-800 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-gray-700" />
+                    <span>Baixar Modelo (.csv)</span>
+                  </button>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={downloadSampleRollCallExcel}
-                  className="flex-1 min-w-[200px] py-2 px-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-colors shadow-2xs"
-                >
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
-                  <span>Baixar Modelo Excel (.xlsx) com Trimestres</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={downloadSampleRollCallCSV}
-                  className="flex-1 min-w-[200px] py-2 px-3 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-colors shadow-2xs"
-                >
-                  <FileText className="w-4 h-4 text-amber-700" />
-                  <span>Baixar Modelo CSV (.csv) com Trimestres</span>
-                </button>
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 font-mono text-[11px] text-gray-800 overflow-x-auto whitespace-nowrap">
+                Trimestre | Sábado Nº | Data do Sábado | Classe / Unidade | Nome do Membro | Presença | Pontualidade | Lição Estudada | Oferta | Pequeno Grupo
               </div>
+
+              <p className="text-[11px] text-gray-500 leading-relaxed">
+                • <strong>Trimestre</strong>: 1, 2, 3 ou 4. • <strong>Sábado Nº</strong>: 1 a 13. • <strong>Data</strong>: AAAA-MM-DD ou DD/MM/AAAA.
+                <br />• <strong>Critérios (Presença, Pontualidade, Lição, Oferta, PG)</strong>: Preencha com <strong>Sim</strong> ou <strong>Não</strong> (ou 1 / 0 / X).
+              </p>
             </div>
 
-            {/* Preview of Parsed Records with Quarter Filter */}
+            {/* Preview of Parsed Records with Filters */}
             {csvPreview.length > 0 && (
-              <div className="space-y-3 pt-2 border-t border-gray-200">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-gray-800">
-                      Registros Identificados ({csvPreview.length})
-                    </span>
-                    <span className="text-[10px] text-emerald-800 font-extrabold bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">
-                      Pronto para Gravar
-                    </span>
-                  </div>
-
-                  {/* Quarter distribution summary tags */}
-                  <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
-                    <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold">
-                      1º Trim: {quarterCounts[1]}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 font-bold">
-                      2º Trim: {quarterCounts[2]}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-800 border border-purple-200 font-bold">
-                      3º Trim: {quarterCounts[3]}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 font-bold">
-                      4º Trim: {quarterCounts[4]}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Filter Tabs in Preview */}
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-                  <span className="text-gray-500 font-bold flex items-center gap-1 text-[11px] pr-1">
-                    <Filter className="w-3.5 h-3.5" />
-                    Filtrar visualização:
+              <div className="space-y-2 pt-2 border-t border-gray-200">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                    <Check className="w-4 h-4 text-emerald-600" />
+                    Pré-visualização dos Registros ({csvPreview.length} encontrados)
                   </span>
-                  {(['all', 1, 2, 3, 4] as const).map((q) => {
-                    const count = q === 'all' ? quarterCounts.all : quarterCounts[q];
-                    const label = q === 'all' ? `Todos (${count})` : `${q}º Trimestre (${count})`;
-                    const isActive = previewQuarterFilter === q;
-                    return (
-                      <button
-                        key={q}
-                        type="button"
-                        onClick={() => setPreviewQuarterFilter(q)}
-                        className={`px-2.5 py-1 rounded-lg font-bold text-xs transition-all shrink-0 ${
-                          isActive
-                            ? 'bg-gray-900 text-white shadow-2xs'
-                            : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
+
+                  {/* Filter Tabs by Quarter */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto text-xs">
+                    <span className="text-gray-500 font-bold flex items-center gap-1 text-[11px] pr-1">
+                      <Filter className="w-3.5 h-3.5" />
+                      Filtrar trimestre:
+                    </span>
+                    {(['all', 1, 2, 3, 4] as const).map((q) => {
+                      const count = q === 'all' ? quarterCounts.all : quarterCounts[q];
+                      const label = q === 'all' ? `Todos (${count})` : `${q}º Trim (${count})`;
+                      const isActive = previewQuarterFilter === q;
+                      return (
+                        <button
+                          key={q}
+                          type="button"
+                          onClick={() => setPreviewQuarterFilter(q)}
+                          className={`px-2.5 py-1 rounded-lg font-bold text-xs transition-all shrink-0 cursor-pointer ${
+                            isActive
+                              ? 'bg-gray-900 text-white shadow-2xs'
+                              : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
-                {/* List of items */}
                 <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-xl divide-y divide-gray-100 bg-gray-50/50">
-                  {filteredPreview.map((item, idx) => {
-                    const quarterBadgeColors: Record<number, string> = {
-                      1: 'bg-emerald-100 text-emerald-900 border-emerald-300',
-                      2: 'bg-blue-100 text-blue-900 border-blue-300',
-                      3: 'bg-purple-100 text-purple-900 border-purple-300',
-                      4: 'bg-amber-100 text-amber-900 border-amber-300',
-                    };
+                  {filteredPreview.length === 0 ? (
+                    <div className="p-6 text-center text-gray-500 text-xs">
+                      Nenhum registro encontrado para o filtro selecionado.
+                    </div>
+                  ) : (
+                    filteredPreview.map((item, idx) => {
+                      const quarterBadgeColors: Record<number, string> = {
+                        1: 'bg-emerald-100 text-emerald-900 border-emerald-300',
+                        2: 'bg-blue-100 text-blue-900 border-blue-300',
+                        3: 'bg-purple-100 text-purple-900 border-purple-300',
+                        4: 'bg-amber-100 text-amber-900 border-amber-300',
+                      };
 
-                    return (
-                      <div
-                        key={idx}
-                        className="p-2.5 flex flex-col gap-1.5 text-[11px] hover:bg-white transition-colors"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span
-                              className={`px-2 py-0.5 rounded-md font-extrabold text-[10px] border shrink-0 ${
-                                quarterBadgeColors[item.quarter] || 'bg-gray-100 text-gray-800'
-                              }`}
-                            >
-                              {item.quarter}º Trimestre • Sáb {String(item.sabbathNumberInQuarter).padStart(2, '0')}
-                            </span>
-                            <span className="font-bold text-gray-900 truncate">
-                              {item.memberName}
-                            </span>
-                            <span className="text-[10px] text-gray-500 truncate hidden sm:inline">
-                              ({item.className})
+                      return (
+                        <div
+                          key={idx}
+                          className="p-2.5 flex flex-col gap-1.5 text-[11px] hover:bg-white transition-colors"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span
+                                className={`px-2 py-0.5 rounded-md font-extrabold text-[10px] border shrink-0 ${
+                                  quarterBadgeColors[item.quarter] || 'bg-gray-100 text-gray-800'
+                                }`}
+                              >
+                                {item.quarter}º Trim • Sáb {String(item.sabbathNumberInQuarter).padStart(2, '0')}
+                              </span>
+                              <span className="font-bold text-gray-900 truncate">
+                                {item.memberName}
+                              </span>
+                              <span className="text-[10px] text-gray-600 truncate font-semibold">
+                                ({item.className})
+                              </span>
+                            </div>
+
+                            <span className="text-[11px] font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300 shrink-0">
+                              +{item.score} pts
                             </span>
                           </div>
 
-                          <span className="text-[11px] font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300 shrink-0">
-                            +{item.score} pts
-                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                            <span className="text-gray-600 font-mono bg-white px-1.5 py-0.5 rounded border border-gray-200">
+                              📅 {item.formattedDisplayDate || item.sabbathDate}
+                            </span>
+                            <span
+                              className={`px-1.5 py-0.5 rounded font-bold ${
+                                item.present
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                  : 'bg-red-100 text-red-800 border border-red-200'
+                              }`}
+                            >
+                              {item.present ? 'Presente' : 'Ausente'}
+                            </span>
+                            {item.present && (
+                              <>
+                                <span
+                                  className={`px-1.5 py-0.5 rounded font-bold ${
+                                    item.punctual
+                                      ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                      : 'bg-gray-200 text-gray-700'
+                                  }`}
+                                >
+                                  {item.punctual ? 'Pontual' : 'Atrasado'}
+                                </span>
+                                <span
+                                  className={`px-1.5 py-0.5 rounded font-bold ${
+                                    item.studiedLesson
+                                      ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                      : 'bg-gray-200 text-gray-700'
+                                  }`}
+                                >
+                                  {item.studiedLesson ? 'Lição OK' : 'Sem Lição'}
+                                </span>
+                                <span
+                                  className={`px-1.5 py-0.5 rounded font-bold ${
+                                    item.broughtOffering
+                                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                      : 'bg-gray-200 text-gray-700'
+                                  }`}
+                                >
+                                  {item.broughtOffering ? 'Oferta: Sim' : 'Oferta: Não'}
+                                </span>
+                                <span
+                                  className={`px-1.5 py-0.5 rounded font-bold ${
+                                    item.attendedPG
+                                      ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                      : 'bg-gray-200 text-gray-700'
+                                  }`}
+                                >
+                                  {item.attendedPG ? 'PG OK' : 'Sem PG'}
+                                </span>
+                              </>
+                            )}
+                          </div>
                         </div>
-
-                        <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
-                          <span className="text-gray-500 font-mono bg-white px-1.5 py-0.5 rounded border border-gray-200">
-                            📅 {item.formattedDisplayDate || item.sabbathDate}
-                          </span>
-                          <span
-                            className={`px-1.5 py-0.5 rounded font-bold ${
-                              item.present
-                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                : 'bg-red-100 text-red-800 border border-red-200'
-                            }`}
-                          >
-                            {item.present ? 'Presente' : 'Ausente'}
-                          </span>
-                          {item.present && (
-                            <>
-                              <span
-                                className={`px-1.5 py-0.5 rounded font-bold ${
-                                  item.punctual
-                                    ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                    : 'bg-gray-200 text-gray-700'
-                                }`}
-                              >
-                                {item.punctual ? 'Pontual' : 'Atrasado'}
-                              </span>
-                              <span
-                                className={`px-1.5 py-0.5 rounded font-bold ${
-                                  item.studiedLesson
-                                    ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                                    : 'bg-gray-200 text-gray-700'
-                                }`}
-                              >
-                                {item.studiedLesson ? 'Lição OK' : 'Sem Lição'}
-                              </span>
-                              <span
-                                className={`px-1.5 py-0.5 rounded font-bold ${
-                                  item.broughtOffering
-                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                    : 'bg-gray-200 text-gray-700'
-                                }`}
-                              >
-                                {item.broughtOffering ? `Oferta R$ ${(item.offeringAmount || 0).toFixed(2)}` : 'Sem Oferta'}
-                              </span>
-                              <span
-                                className={`px-1.5 py-0.5 rounded font-bold ${
-                                  item.attendedPG
-                                    ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                                    : 'bg-gray-200 text-gray-700'
-                                }`}
-                              >
-                                {item.attendedPG ? 'PG OK' : 'Sem PG'}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                 </div>
               </div>
             )}
 
             {/* Actions */}
-            <div className="flex items-center justify-between gap-2 pt-3 border-t border-gray-100">
-              <span className="text-xs text-gray-500">
-                {csvPreview.length > 0 ? `${csvPreview.length} registro(s) no total` : 'Nenhum arquivo selecionado ainda'}
+            <div className="flex items-center justify-between gap-2 pt-3 border-t border-gray-100 flex-wrap">
+              <span className="text-xs text-gray-500 font-medium">
+                {csvPreview.length > 0
+                  ? `${csvPreview.length} registro(s) prontos para importar`
+                  : 'Nenhum arquivo processado ainda'}
               </span>
 
               <div className="flex items-center gap-2">
@@ -1841,7 +1895,7 @@ export const RollCallView: React.FC<RollCallViewProps> = ({
                   }`}
                 >
                   <Check className="w-4 h-4" />
-                  <span>Confirmar e Importar Chamadas ({csvPreview.length})</span>
+                  <span>Confirmar e Importar Registros ({csvPreview.length})</span>
                 </button>
               </div>
             </div>
